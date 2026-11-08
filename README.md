@@ -4,6 +4,8 @@ Makes email-sized copies of a folder of photos on Windows 10 or 11, with nothing
 
 Drag a folder onto `Resize-Photos.bat`, or double-click the file and choose a folder. Copies go to a `resized` subfolder, and the originals are not modified.
 
+The package is the three files in `src/resize-photos/`. Copy that folder to the Windows computer and keep the files together.
+
 | Setting | Default |
 |---|---|
 | Longest side | 2000 pixels, never enlarged |
@@ -31,3 +33,7 @@ python -m unittest discover -s tests
 ```
 
 The tests need Windows and Pillow.
+
+## License
+
+MIT. See `LICENSE`.
