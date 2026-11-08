@@ -26,6 +26,7 @@ The first command writes the zip to the git-excluded `dist` folder. The tests ne
 
 - System.Drawing ignores the EXIF orientation tag and the copies do not keep it, so `Set-UprightOrientation` rotates the pixels before resizing.
 - System.Drawing cannot decode HEIC, HEIF, WebP or AVIF. The script lists those files as not converted.
+- Motion photos store an MP4 after the JPEG end marker. Re-encoding drops it, and the copy-unchanged branch is skipped for any file with data after the image, so that branch cannot carry a video into the output.
 - Use `-LiteralPath` and `[System.IO.File]` for file access, because `[` and `]` in photo names are wildcards to most PowerShell cmdlets.
 - A dragged drive root reaches the script as `D:"`, because the trailing backslash escapes the closing quote. The script repairs that value.
 - `RESIZE_PHOTOS_NO_OPEN=1` stops the script opening Explorer. The tests set it.

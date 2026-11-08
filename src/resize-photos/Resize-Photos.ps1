@@ -14,6 +14,7 @@ Add-Type -AssemblyName System.Drawing
 # A PowerShell loop over millions of pixels takes seconds per photo, so the scan is compiled.
 Add-Type -ReferencedAssemblies System.Drawing -TypeDefinition @'
 using System;
+using System.IO;
 using System.Drawing;
 using System.Drawing.Imaging;
 using System.Runtime.InteropServices;
@@ -41,6 +42,40 @@ public static class ResizePhotosPixels
         {
             bitmap.UnlockBits(data);
         }
+    }
+}
+
+// Motion photos store a video after the JPEG end marker. Walking the segments
+// avoids stopping at an end marker inside an embedded thumbnail.
+public static class ResizePhotosJpeg
+{
+    static int FindImageEnd(byte[] file)
+    {
+        int i = 2;
+        while (i + 1 < file.Length)
+        {
+            if (file[i] != 0xFF) { i++; continue; }
+            byte marker = file[i + 1];
+            if (marker == 0xFF) { i++; continue; }
+            if (marker == 0xD9) { return i + 2; }
+            if (marker == 0x00 || marker == 0x01 || (marker >= 0xD0 && marker <= 0xD7)) { i += 2; continue; }
+            if (i + 3 >= file.Length) { return file.Length; }
+            i += 2 + ((file[i + 2] << 8) | file[i + 3]);
+        }
+        return file.Length;
+    }
+
+    public static string ExtraDataKind(string path)
+    {
+        byte[] file = File.ReadAllBytes(path);
+        if (file.Length < 2 || file[0] != 0xFF || file[1] != 0xD8) { return "none"; }
+        int end = FindImageEnd(file);
+        if (end >= file.Length) { return "none"; }
+        for (int i = end; i + 3 < file.Length; i++)
+        {
+            if (file[i] == 'f' && file[i + 1] == 't' && file[i + 2] == 'y' && file[i + 3] == 'p') { return "video"; }
+        }
+        return "data";
     }
 }
 '@
@@ -163,7 +198,8 @@ function Convert-Photo($Source, [string]$OutputFolder, $Claimed) {
         $sourceExtension = $Source.Extension.ToLowerInvariant()
         $sameFormat = if ($keepPng) { $sourceExtension -eq '.png' } else { $sourceExtension -in '.jpg', '.jpeg', '.jfif' }
         $grew = (Get-Item -LiteralPath $temporary).Length -ge $Source.Length
-        if ($sameFormat -and -not $resized -and $grew) {
+        $extraData = [ResizePhotosJpeg]::ExtraDataKind($Source.FullName)
+        if ($sameFormat -and -not $resized -and $grew -and $extraData -eq 'none') {
             [System.IO.File]::Copy($Source.FullName, $temporary, $true)
         }
 
@@ -175,6 +211,7 @@ function Convert-Photo($Source, [string]$OutputFolder, $Claimed) {
         return [PSCustomObject]@{
             Name   = $outputName
             Length = (Get-Item -LiteralPath $outputPath).Length
+            MotionRemoved = ($extraData -eq 'video')
         }
     }
     finally {
@@ -231,6 +268,7 @@ $failed = New-Object System.Collections.Generic.List[string]
 [long]$totalBefore = 0
 [long]$totalAfter = 0
 $made = 0
+$motionRemoved = 0
 $position = 0
 
 foreach ($photo in $photos) {
@@ -241,7 +279,12 @@ foreach ($photo in $photos) {
         $made++
         $totalBefore += $photo.Length
         $totalAfter += $result.Length
-        Write-Host "$counter $($photo.Name)   $(Format-Megabytes $photo.Length) -> $(Format-Megabytes $result.Length)"
+        $motionNote = ''
+        if ($result.MotionRemoved) {
+            $motionRemoved++
+            $motionNote = '   (motion video removed)'
+        }
+        Write-Host "$counter $($photo.Name)   $(Format-Megabytes $photo.Length) -> $(Format-Megabytes $result.Length)$motionNote"
     }
     catch {
         $failed.Add($photo.Name)
@@ -251,6 +294,7 @@ foreach ($photo in $photos) {
 
 Write-Host ''
 Write-Host "Done. $made photo(s) made: $(Format-Megabytes $totalBefore) -> $(Format-Megabytes $totalAfter)"
+if ($motionRemoved -gt 0) { Write-Host "Motion videos removed from the copies: $motionRemoved" }
 if ($totalAfter -gt $EmailLimitBytes) {
     $emails = [int][Math]::Ceiling($totalAfter / $EmailLimitBytes)
     Write-Host "Email services allow about 20 MB per message, so plan on about $emails emails."

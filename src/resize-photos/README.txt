@@ -29,6 +29,9 @@ WHAT YOU GET
 - Photos are saved as JPG at quality 85.
 - Images with transparent areas stay PNG.
 - Smaller photos are not enlarged.
+- Motion photos become still photos. The short video stored inside the
+  photo is left out of the copy, and the original keeps it.
+- iPhone Live Photo videos (.MOV files) are not copied.
 - Running it again replaces the earlier copies in "resized".
 
 

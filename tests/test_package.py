@@ -20,6 +20,8 @@ import build_package  # noqa: E402
 
 ORIENTATION_TAG = 0x0112
 OLD_TIME = 1_500_000_000
+FAKE_VIDEO = b"\x00\x00\x00\x18ftypmp42fake video data"
+MOTION_XMP = b'<x:xmpmeta xmlns:x="adobe:ns:meta/" GCamera:MotionPhoto="1"/>'
 
 
 def noise(width, height):
@@ -74,6 +76,17 @@ def make_fixtures(folder):
 
     profile = ImageCms.ImageCmsProfile(ImageCms.createProfile("sRGB")).tobytes()
     noise(3000, 2000).save(folder / "profiled.jpg", quality=95, icc_profile=profile)
+
+    noise(3000, 4000).save(folder / "motion.jpg", quality=90, xmp=MOTION_XMP)
+    with open(folder / "motion.jpg", "ab") as photo:
+        photo.write(FAKE_VIDEO + bytes(2_000_000))
+
+    noise(1000, 1000).save(folder / "small_motion.jpg", quality=20)
+    with open(folder / "small_motion.jpg", "ab") as photo:
+        photo.write(FAKE_VIDEO)
+
+    noise(1000, 1000).save(folder / "progressive.jpg", quality=20, progressive=True)
+    noise(1000, 1000).save(folder / "marker_in_comment.jpg", quality=20, comment=b"\xff\xd9 not the end")
 
     (folder / "[beach] 100% & sun.jpg").write_bytes((folder / "small.jpg").read_bytes())
     (folder / "phone.heic").write_bytes(b"not decodable here")
@@ -169,6 +182,30 @@ class PackageTests(unittest.TestCase):
             digest(self.output / "already_compressed.jpg"),
             digest(self.folder / "already_compressed.jpg"),
         )
+
+    def assert_still_photo(self, name):
+        data = (self.output / name).read_bytes()
+        self.assertNotIn(b"ftyp", data, name)
+        self.assertNotIn(b"MotionPhoto", data, name)
+        self.assertTrue(data.endswith(b"\xff\xd9"), name)
+
+    def test_motion_video_is_removed_from_resized_copy(self):
+        self.assert_still_photo("motion.jpg")
+        with self.open("motion.jpg") as image:
+            self.assertEqual(image.size, (1500, 2000))
+        self.assertRegex(self.result.stdout, r"motion\.jpg .*\(motion video removed\)")
+
+    def test_motion_video_is_removed_when_photo_would_grow(self):
+        self.assert_still_photo("small_motion.jpg")
+        self.assertRegex(self.result.stdout, r"small_motion\.jpg .*\(motion video removed\)")
+        self.assertIn("Motion videos removed from the copies: 2", self.result.stdout)
+
+    def test_original_motion_photo_keeps_its_video(self):
+        self.assertIn(FAKE_VIDEO, (self.folder / "motion.jpg").read_bytes())
+
+    def test_still_photos_are_not_mistaken_for_motion_photos(self):
+        for name in ("progressive.jpg", "marker_in_comment.jpg"):
+            self.assertEqual(digest(self.output / name), digest(self.folder / name), name)
 
     def test_special_characters_in_file_name(self):
         self.assertTrue((self.output / "[beach] 100% & sun.jpg").exists())

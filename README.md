@@ -11,7 +11,9 @@ Drag a folder onto `Resize-Photos.bat`, or double-click the file and choose a fo
 | Input formats | JPG, PNG, BMP, TIFF |
 | Folders processed | The chosen folder only |
 
-Copies are rotated upright and keep the color profile and modified date of the original. Other camera metadata, including location, is not copied. A photo that needs no resizing and would grow when re-encoded is copied unchanged, with its metadata.
+Copies are rotated upright and keep the color profile and modified date of the original. Other camera metadata, including location, is not copied. A photo that needs no resizing and would grow when re-encoded is copied unchanged, with its metadata, unless the file holds data after the image.
+
+Motion photos become still photos: the video stored after the JPEG image data is left out of the copy, and the console names each photo it was removed from. Separate video files, such as `.MOV` files from iPhone Live Photos, are not copied.
 
 HEIC, HEIF, WebP, AVIF and GIF files are listed as not converted.
 
