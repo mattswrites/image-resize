@@ -239,6 +239,15 @@ class PackageTests(unittest.TestCase):
         with Image.open(folder / "resized" / "a.jpg") as image:
             self.assertEqual(image.size, (1500, 2000))
 
+    def test_launcher_without_script_explains_what_to_do(self):
+        alone = self.work / "alone (copy) & here"
+        alone.mkdir()
+        shutil.copy(self.bat, alone)
+        result = run_package(alone / "Resize-Photos.bat", self.folder)
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("Extract All", result.stdout)
+        self.assertNotIn("-File parameter", result.stdout + result.stderr)
+
     def test_missing_folder_is_reported(self):
         result = run_package(self.bat, self.work / "does-not-exist")
         self.assertEqual(result.returncode, 1)
